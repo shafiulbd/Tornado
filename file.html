@@ -1,1 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tornado</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#0A0E17;
+    --bg-1:#111827;
+    --bg-2:#182238;
+    --line:#232E45;
+    --ink:#E9EDF6;
+    --ink-dim:#8A93A8;
+    --cyan:#49D3E0;
+    --violet:#7C6CF0;
+    --gold:#F0B94E;
+    --danger:#E0605A;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0;height:100%;background:var(--bg-0);color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    overscroll-behavior:none;user-select:none;
+  }
+  body{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;}
+  .num, .brand{font-family:'Space Grotesk',sans-serif;}
 
+  /* ---------- top bar ---------- */
+  header{
+    padding:calc(14px + var(--safe-top)) 18px 12px;
+    display:flex;align-items:center;justify-content:space-between;
+    background:linear-gradient(180deg,var(--bg-1),rgba(17,24,39,0));
+    flex-shrink:0;
+  }
+  .id{display:flex;align-items:center;gap:9px;}
+  .avatar{
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(145deg,var(--violet),var(--cyan));
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:14px;color:var(--bg-0);
+  }
+  .id .name{font-size:14px;font-weight:600;line-height:1.1;}
+  .id .rank{font-size:11.5px;color:var(--ink-dim);}
+  .balance-chip{
+    display:flex;align-items:center;gap:7px;
+    background:var(--bg-2);border:1px solid var(--line);
+    padding:7px 12px 7px 8px;border-radius:100px;
+  }
+  .balance-chip .dot{
+    width:18px;height:18px;border-radius:50%;
+    background:conic-gradient(from 90deg,var(--cyan),var(--violet),var(--cyan));
+  }
+  .balance-chip .num{font-size:14.5px;font-weight:600;letter-spacing:-0.01em;}
+
+  /* ---------- screens ---------- */
+  main{flex:1;overflow-y:auto;position:relative;}
+  .screen{display:none;padding:0 18px 18px;min-height:100%;}
+  .screen.active{display:block;}
+
+  /* ---------- MINE screen ---------- */
+  #mine{display:none;flex-direction:column;align-items:center;padding-top:6px;}
+  #mine.active{display:flex;}
+
+  .total-row{text-align:center;margin:6px 0 2px;}
+  .total-row .label{font-size:12px;color:var(--ink-dim);letter-spacing:.02em;}
+  .total-row .amount{font-size:40px;font-weight:700;letter-spacing:-0.02em;margin-top:2px;}
+  .total-row .amount span{color:var(--cyan);}
+
+  .funnel-wrap{
+    position:relative;width:min(70vw,270px);aspect-ratio:1;
+    margin:22px 0 8px;display:flex;align-items:center;justify-content:center;
+  }
+  .funnel-glow{
+    position:absolute;inset:8%;border-radius:50%;
+    background:conic-gradient(from var(--rot,0deg),
+      var(--violet) 0deg, var(--cyan) 90deg, var(--violet) 180deg, var(--cyan) 270deg, var(--violet) 360deg);
+    filter:blur(26px);opacity:.55;
+    animation:spin 6s linear infinite;
+  }
+  .funnel-ring{
+    position:absolute;inset:0;border-radius:50%;
+    border:1.5px solid var(--line);
+  }
+  .funnel-btn{
+    position:relative;width:78%;height:78%;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%,#20304F,#0B1220 70%);
+    border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;transition:transform .08s ease;
+  }
+  .funnel-btn:active{transform:scale(.94);}
+  .funnel-btn svg{width:46%;height:46%;}
+  @keyframes spin{to{--rot:360deg;}}
+
+  .float-num{
+    position:absolute;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;
+    color:var(--gold);pointer-events:none;
+    animation:floatUp .75s ease-out forwards;
+  }
+  @keyframes floatUp{
+    0%{opacity:1;transform:translateY(0) scale(1);}
+    100%{opacity:0;transform:translateY(-70px) scale(1.15);}
+  }
+
+  .energy-block{width:100%;max-width:340px;margin-top:6px;}
+  .energy-top{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-dim);margin-bottom:6px;}
+  .energy-top b{color:var(--ink);font-weight:600;}
+  .bar{height:9px;border-radius:100px;background:var(--bg-2);border:1px solid var(--line);overflow:hidden;}
+  .bar-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--cyan),var(--violet));transition:width .2s ease;}
+
+  .rate-row{display:flex;gap:10px;width:100%;max-width:340px;margin-top:14px;}
+  .rate-card{
+    flex:1;background:var(--bg-1);border:1px solid var(--line);border-radius:14px;
+    padding:10px 12px;
+  }
+  .rate-card .k{font-size:11px;color:var(--ink-dim);}
+  .rate-card .v{font-size:15px;font-weight:600;margin-top:2px;}
+
+  /* ---------- generic section header ---------- */
+  .sect-title{font-size:20px;font-weight:700;letter-spacing:-0.01em;padding-top:18px;margin-bottom:2px;}
+  .sect-sub{font-size:12.5px;color:var(--ink-dim);margin-bottom:16px;}
+
+  /* ---------- BOOST screen ---------- */
+  .boost-card{
+    display:flex;align-items:center;gap:12px;
+    background:var(--bg-1);border:1px solid var(--line);border-radius:16px;
+    padding:13px 14px;margin-bottom:10px;
+  }
+  .boost-icon{
+    width:42px;height:42px;border-radius:11px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--bg-2);
+  }
+  .boost-icon svg{width:22px;height:22px;}
+  .boost-info{flex:1;min-width:0;}
+  .boost-info .name{font-size:14.5px;font-weight:600;}
+  .boost-info .desc{font-size:12px;color:var(--ink-dim);margin-top:1px;}
+  .boost-buy{
+    flex-shrink:0;background:var(--bg-2);border:1px solid var(--line);
+    border-radius:10px;padding:8px 12px;text-align:center;min-width:74px;
+  }
+  .boost-buy .cost{font-size:13px;font-weight:600;color:var(--gold);}
+  .boost-buy .lvl{font-size:10.5px;color:var(--ink-dim);margin-top:1px;}
+  .boost-buy.maxed .cost{color:var(--ink-dim);}
+
+  /* ---------- TASKS screen ---------- */
+  .task-card{
+    display:flex;align-items:center;gap:12px;
+    background:var(--bg-1);border:1px solid var(--line);border-radius:16px;
+    padding:13px 14px;margin-bottom:10px;
+  }
+  .task-icon{width:40px;height:40px;border-radius:10px;background:var(--bg-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .task-icon svg{width:20px;height:20px;}
+  .task-info{flex:1;}
+  .task-info .name{font-size:14px;font-weight:600;}
+  .task-info .reward{font-size:12px;color:var(--gold);margin-top:1px;}
+  .task-go{
+    flex-shrink:0;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:10px;
+    background:linear-gradient(135deg,var(--cyan),var(--violet));color:#0B1220;
+  }
+  .task-go.done{background:var(--bg-2);color:var(--ink-dim);}
+
+  /* ---------- FRENS screen ---------- */
+  .invite-card{
+    background:linear-gradient(160deg,var(--bg-2),var(--bg-1));
+    border:1px solid var(--line);border-radius:18px;padding:18px;text-align:center;margin-bottom:18px;
+  }
+  .invite-card .headline{font-size:16px;font-weight:600;}
+  .invite-card .sub{font-size:12.5px;color:var(--ink-dim);margin-top:4px;line-height:1.4;}
+  .invite-btn{
+    margin-top:14px;width:100%;padding:12px;border-radius:12px;
+    background:linear-gradient(135deg,var(--cyan),var(--violet));
+    color:#0B1220;font-weight:700;font-size:14px;font-family:inherit;border:none;
+  }
+  .fren-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
+  .fren-row:last-child{border-bottom:none;}
+  .fren-row .avatar{width:34px;height:34px;font-size:13px;}
+  .fren-row .info{flex:1;}
+  .fren-row .info .name{font-size:13.5px;font-weight:600;}
+  .fren-row .info .sub{font-size:11.5px;color:var(--ink-dim);}
+  .fren-row .earn{font-size:13px;font-weight:600;color:var(--gold);}
+  .empty{text-align:center;padding:30px 10px;color:var(--ink-dim);font-size:13px;}
+
+  /* ---------- WALLET screen ---------- */
+  .wallet-hero{
+    background:var(--bg-1);border:1px solid var(--line);border-radius:18px;
+    padding:20px;text-align:center;margin-bottom:16px;
+  }
+  .wallet-hero .k{font-size:12px;color:var(--ink-dim);}
+  .wallet-hero .v{font-size:32px;font-weight:700;margin-top:4px;letter-spacing:-0.02em;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-card{background:var(--bg-1);border:1px solid var(--line);border-radius:14px;padding:12px 14px;}
+  .stat-card .k{font-size:11.5px;color:var(--ink-dim);}
+  .stat-card .v{font-size:16px;font-weight:600;margin-top:3px;}
+  .withdraw-note{
+    margin-top:16px;font-size:12px;color:var(--ink-dim);line-height:1.5;
+    background:var(--bg-1);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+  }
+
+  /* ---------- bottom nav ---------- */
+  nav{
+    display:flex;flex-shrink:0;
+    background:var(--bg-1);border-top:1px solid var(--line);
+    padding:8px 6px calc(8px + var(--safe-bottom));
+  }
+  nav button{
+    flex:1;background:none;border:none;display:flex;flex-direction:column;
+    align-items:center;gap:4px;padding:6px 2px;color:var(--ink-dim);font-family:inherit;
+  }
+  nav button svg{width:21px;height:21px;}
+  nav button span{font-size:10.5px;font-weight:500;}
+  nav button.active{color:var(--cyan);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="id">
+    <div class="avatar">T</div>
+    <div>
+      <div class="name" id="userName">Miner</div>
+      <div class="rank" id="userRank">Rank · Dust Chaser</div>
+    </div>
+  </div>
+  <div class="balance-chip">
+    <div class="dot"></div>
+    <div class="num" id="headerBalance">0</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- MINE -->
+  <section class="screen" id="mine">
+    <div class="total-row">
+      <div class="label">Total mined</div>
+      <div class="amount"><span id="mineBalance">0</span> TOR</div>
+    </div>
+
+    <div class="funnel-wrap" id="funnelWrap">
+      <div class="funnel-glow"></div>
+      <div class="funnel-ring"></div>
+      <div class="funnel-btn" id="tapBtn">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 5c3 1.5 13 1.5 16 0" stroke="#49D3E0" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M6 9c3 1.2 9 1.2 12 0" stroke="#7C6CF0" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M8 13c2 .9 6 .9 8 0" stroke="#49D3E0" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M10 17c1 .6 3 .6 4 0" stroke="#7C6CF0" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M11.3 20.5c.4.5 1 .5 1.4 0" stroke="#F0B94E" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="energy-block">
+      <div class="energy-top"><span>Energy</span><b id="energyLabel">1000 / 1000</b></div>
+      <div class="bar"><div class="bar-fill" id="energyBar" style="width:100%"></div></div>
+    </div>
+
+    <div class="rate-row">
+      <div class="rate-card">
+        <div class="k">Per tap</div>
+        <div class="v" id="perTapView">+1 TOR</div>
+      </div>
+      <div class="rate-card">
+        <div class="k">Energy cap</div>
+        <div class="v" id="capView">1000</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOOST -->
+  <section class="screen" id="boost">
+    <div class="sect-title">Boosts</div>
+    <div class="sect-sub">Spend TOR to mine faster and hold more energy.</div>
+    <div id="boostList"></div>
+  </section>
+
+  <!-- TASKS -->
+  <section class="screen" id="tasks">
+    <div class="sect-title">Tasks</div>
+    <div class="sect-sub">One-time jobs for a flat TOR reward.</div>
+    <div id="taskList"></div>
+  </section>
+
+  <!-- FRENS -->
+  <section class="screen" id="frens">
+    <div class="sect-title">Frens</div>
+    <div class="sect-sub">Invite people, earn a cut of what they mine.</div>
+    <div class="invite-card">
+      <div class="headline">Every fren pays out</div>
+      <div class="sub">You get 10% of everything an invited fren mines, forever. They get a 500 TOR head start.</div>
+      <button class="invite-btn" id="inviteBtn">Invite a fren</button>
+    </div>
+    <div id="frenList"></div>
+  </section>
+
+  <!-- WALLET -->
+  <section class="screen" id="wallet">
+    <div class="sect-title">Wallet</div>
+    <div class="sect-sub">Your balance and mining stats.</div>
+    <div class="wallet-hero">
+      <div class="k">Available balance</div>
+      <div class="v"><span id="walletBalance">0</span> TOR</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="k">Total taps</div><div class="v" id="statTaps">0</div></div>
+      <div class="stat-card"><div class="k">Rank</div><div class="v" id="statRank">Dust Chaser</div></div>
+      <div class="stat-card"><div class="k">Boosts owned</div><div class="v" id="statBoosts">0</div></div>
+      <div class="stat-card"><div class="k">Frens invited</div><div class="v" id="statFrens">0</div></div>
+    </div>
+    <div class="withdraw-note">Withdrawals open once Tornado connects an external payout partner. Keep mining — your balance is saved to this device.</div>
+  </section>
+
+</main>
+
+<nav>
+  <button class="active" data-screen="mine">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1116 0 8 8 0 01-16 0z" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <span>Mine</span>
+  </button>
+  <button data-screen="boost">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    <span>Boost</span>
+  </button>
+  <button data-screen="tasks">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M5 4h14v16l-4-2-3 2-3-2-4 2V4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    <span>Tasks</span>
+  </button>
+  <button data-screen="frens">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="1.6"/><path d="M16 4.5c1.7.4 3 2 3 3.9 0 1.9-1.3 3.5-3 3.9M19 20c0-2.8-1.9-5.2-4.5-5.9" stroke="currentColor" stroke-width="1.6"/></svg>
+    <span>Frens</span>
+  </button>
+  <button data-screen="wallet">
+    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.6"/><circle cx="16.5" cy="14" r="1.1" fill="currentColor"/></svg>
+    <span>Wallet</span>
+  </button>
+</nav>
+
+<script>
+(function(){
+  "use strict";
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if(tg){ try{ tg.ready(); tg.expand(); }catch(e){} }
+
+  // ---------- state ----------
+  var KEY = "tornado_state_v1";
+  var defaultState = {
+    balance: 0,
+    totalTaps: 0,
+    energy: 1000,
+    energyCap: 1000,
+    perTap: 1,
+    regenPerSec: 1,
+    boosts: { power:0, capacity:0, regen:0 },
+    tasksDone: {},
+    frens: [],
+    lastSeen: Date.now()
+  };
+  var state = load();
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(KEY);
+      if(!raw) return JSON.parse(JSON.stringify(defaultState));
+      var s = JSON.parse(raw);
+      return Object.assign(JSON.parse(JSON.stringify(defaultState)), s);
+    }catch(e){ return JSON.parse(JSON.stringify(defaultState)); }
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  // regen energy for time elapsed while closed
+  (function catchUp(){
+    var elapsedSec = Math.max(0, (Date.now() - (state.lastSeen||Date.now()))/1000);
+    state.energy = Math.min(state.energyCap, state.energy + elapsedSec*state.regenPerSec);
+    state.lastSeen = Date.now();
+  })();
+
+  // ---------- boost config ----------
+  var boostDefs = [
+    { id:"power", name:"Sharper Vortex", desc:"+1 TOR per tap", baseCost:50, growth:1.6,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="#F0B94E" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+      apply:function(){ state.perTap += 1; } },
+    { id:"capacity", name:"Wider Funnel", desc:"+250 energy cap", baseCost:80, growth:1.55,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#49D3E0" stroke-width="1.6"/></svg>',
+      apply:function(){ state.energyCap += 250; } },
+    { id:"regen", name:"Steady Winds", desc:"+1 energy / sec", baseCost:120, growth:1.7,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><path d="M4 8c3 1.4 13 1.4 16 0M4 16c3 1.4 13 1.4 16 0" stroke="#7C6CF0" stroke-width="1.6" stroke-linecap="round"/></svg>',
+      apply:function(){ state.regenPerSec += 1; } }
+  ];
+  function boostCost(def){
+    var lvl = state.boosts[def.id] || 0;
+    return Math.round(def.baseCost * Math.pow(def.growth, lvl));
+  }
+
+  // ---------- task config ----------
+  var taskDefs = [
+    { id:"join_channel", name:"Join the Tornado channel", reward:200,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><path d="M21 4L3 11l6 2 2 6 3-4.5L21 4z" stroke="#49D3E0" stroke-width="1.6" stroke-linejoin="round"/></svg>' },
+    { id:"follow_x", name:"Follow Tornado on X", reward:150,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><path d="M4 4l16 16M20 4L4 20" stroke="#7C6CF0" stroke-width="1.6" stroke-linecap="round"/></svg>' },
+    { id:"first_boost", name:"Buy your first boost", reward:100,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" stroke="#F0B94E" stroke-width="1.6" stroke-linejoin="round"/></svg>' },
+    { id:"invite_one", name:"Invite your first fren", reward:300,
+      icon:'<svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="#49D3E0" stroke-width="1.6"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#49D3E0" stroke-width="1.6"/></svg>' }
+  ];
+
+  var ranks = [
+    {min:0,name:"Dust Chaser"}, {min:2000,name:"Gust Runner"},
+    {min:10000,name:"Squall Rider"}, {min:50000,name:"Storm Caller"},
+    {min:200000,name:"Vortex Warden"}
+  ];
+  function currentRank(){
+    var r = ranks[0].name;
+    for(var i=0;i<ranks.length;i++){ if(state.balance >= ranks[i].min) r = ranks[i].name; }
+    return r;
+  }
+
+  // ---------- rendering ----------
+  var el = {
+    headerBalance: document.getElementById("headerBalance"),
+    mineBalance: document.getElementById("mineBalance"),
+    walletBalance: document.getElementById("walletBalance"),
+    energyLabel: document.getElementById("energyLabel"),
+    energyBar: document.getElementById("energyBar"),
+    perTapView: document.getElementById("perTapView"),
+    capView: document.getElementById("capView"),
+    userRank: document.getElementById("userRank"),
+    statTaps: document.getElementById("statTaps"),
+    statRank: document.getElementById("statRank"),
+    statBoosts: document.getElementById("statBoosts"),
+    statFrens: document.getElementById("statFrens"),
+    boostList: document.getElementById("boostList"),
+    taskList: document.getElementById("taskList"),
+    frenList: document.getElementById("frenList")
+  };
+
+  function fmt(n){ return Math.floor(n).toLocaleString("en-US"); }
+
+  function renderTop(){
+    el.headerBalance.textContent = fmt(state.balance);
+    el.mineBalance.textContent = fmt(state.balance);
+    el.walletBalance.textContent = fmt(state.balance);
+    el.energyLabel.textContent = fmt(state.energy) + " / " + fmt(state.energyCap);
+    el.energyBar.style.width = Math.max(0, Math.min(100, (state.energy/state.energyCap)*100)) + "%";
+    el.perTapView.textContent = "+" + state.perTap + " TOR";
+    el.capView.textContent = fmt(state.energyCap);
+    var rank = currentRank();
+    el.userRank.textContent = "Rank · " + rank;
+    el.statRank.textContent = rank;
+    el.statTaps.textContent = fmt(state.totalTaps);
+    el.statBoosts.textContent = fmt((state.boosts.power||0)+(state.boosts.capacity||0)+(state.boosts.regen||0));
+    el.statFrens.textContent = fmt(state.frens.length);
+  }
+
+  function renderBoosts(){
+    el.boostList.innerHTML = "";
+    boostDefs.forEach(function(def){
+      var lvl = state.boosts[def.id] || 0;
+      var cost = boostCost(def);
+      var affordable = state.balance >= cost;
+      var card = document.createElement("div");
+      card.className = "boost-card";
+      card.innerHTML =
+        '<div class="boost-icon">'+def.icon+'</div>'+
+        '<div class="boost-info"><div class="name">'+def.name+'</div><div class="desc">'+def.desc+' · Lv '+lvl+'</div></div>'+
+        '<div class="boost-buy'+(affordable?"":" maxed")+'"><div class="cost">'+fmt(cost)+'</div><div class="lvl">TOR</div></div>';
+      card.querySelector(".boost-buy").addEventListener("click", function(){
+        buyBoost(def);
+      });
+      el.boostList.appendChild(card);
+    });
+  }
+
+  function buyBoost(def){
+    var cost = boostCost(def);
+    if(state.balance < cost) return bump(document.querySelector('[data-screen="boost"]'));
+    state.balance -= cost;
+    state.boosts[def.id] = (state.boosts[def.id]||0) + 1;
+    def.apply();
+    if(def.id === "power" && !state.tasksDone.first_boost){
+      // first boost task check happens in renderTasks via tasksDone map
+    }
+    if(!state.tasksDone.first_boost){ state.tasksDone.first_boost = "eligible"; }
+    save(); renderAll();
+  }
+
+  function renderTasks(){
+    el.taskList.innerHTML = "";
+    taskDefs.forEach(function(def){
+      var status = state.tasksDone[def.id]; // undefined | "eligible" | "claimed"
+      var card = document.createElement("div");
+      card.className = "task-card";
+      var claimed = status === "claimed";
+      card.innerHTML =
+        '<div class="task-icon">'+def.icon+'</div>'+
+        '<div class="task-info"><div class="name">'+def.name+'</div><div class="reward">+'+def.reward+' TOR</div></div>'+
+        '<div class="task-go'+(claimed?" done":"")+'">'+(claimed?"Done":"Claim")+'</div>';
+      card.querySelector(".task-go").addEventListener("click", function(){
+        if(claimed) return;
+        if(def.id === "first_boost" && status !== "eligible") return;
+        if(def.id === "invite_one" && state.frens.length < 1) return;
+        state.tasksDone[def.id] = "claimed";
+        state.balance += def.reward;
+        save(); renderAll();
+      });
+      el.taskList.appendChild(card);
+    });
+  }
+
+  function renderFrens(){
+    if(state.frens.length === 0){
+      el.frenList.innerHTML = '<div class="empty">No frens yet. Invites you send will show up here.</div>';
+      return;
+    }
+    el.frenList.innerHTML = "";
+    state.frens.forEach(function(f){
+      var row = document.createElement("div");
+      row.className = "fren-row";
+      row.innerHTML =
+        '<div class="avatar">'+f.name.charAt(0)+'</div>'+
+        '<div class="info"><div class="name">'+f.name+'</div><div class="sub">Joined</div></div>'+
+        '<div class="earn">+'+fmt(f.earned||0)+'</div>';
+      el.frenList.appendChild(row);
+    });
+  }
+
+  function renderAll(){ renderTop(); renderBoosts(); renderTasks(); renderFrens(); }
+
+  // ---------- tap mechanic ----------
+  var tapBtn = document.getElementById("tapBtn");
+  var funnelWrap = document.getElementById("funnelWrap");
+  tapBtn.addEventListener("click", function(ev){
+    if(state.energy < 1) { bump(funnelWrap); return; }
+    var gain = Math.min(state.perTap, Math.ceil(state.energy));
+    state.energy -= gain;
+    state.balance += gain;
+    state.totalTaps += 1;
+    spawnFloat(gain, ev);
+    save();
+    renderTop();
+  });
+
+  function spawnFloat(gain, ev){
+    var rect = tapBtn.getBoundingClientRect();
+    var x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+    var y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+    var f = document.createElement("div");
+    f.className = "float-num";
+    f.textContent = "+" + gain;
+    f.style.left = x + "px";
+    f.style.top = y + "px";
+    tapBtn.appendChild(f);
+    setTimeout(function(){ f.remove(); }, 780);
+  }
+
+  function bump(node){
+    if(!node) return;
+    node.style.transition = "transform .08s ease";
+    node.style.transform = "translateX(-4px)";
+    setTimeout(function(){ node.style.transform = ""; }, 90);
+  }
+
+  // ---------- energy regen loop ----------
+  setInterval(function(){
+    if(state.energy < state.energyCap){
+      state.energy = Math.min(state.energyCap, state.energy + state.regenPerSec);
+      renderTop();
+      save();
+    }
+    state.lastSeen = Date.now();
+  }, 1000);
+
+  // ---------- invite ----------
+  var sampleNames = ["Rafi","Nadia","Tom","Ayesha","Leo","Mina"];
+  document.getElementById("inviteBtn").addEventListener("click", function(){
+    var botUsername = "your_bot"; // replace with the real bot username before publishing
+    var link = "https://t.me/" + botUsername + "?startapp=ref";
+    if(tg && tg.openTelegramLink){
+      tg.openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(link) + "&text=" + encodeURIComponent("Mining TOR on Tornado. Join me:"));
+    } else if(navigator.share){
+      navigator.share({title:"Tornado", text:"Mining TOR on Tornado. Join me:", url:link});
+    } else {
+      // demo fallback so the flow is visible without Telegram
+      var name = sampleNames[state.frens.length % sampleNames.length];
+      state.frens.push({name:name, earned:0});
+      save(); renderAll();
+    }
+  });
+
+  // ---------- nav ----------
+  var navButtons = document.querySelectorAll("nav button");
+  navButtons.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      navButtons.forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("active"); });
+      document.getElementById(btn.dataset.screen).classList.add("active");
+    });
+  });
+
+  // ---------- telegram user ----------
+  (function initUser(){
+    var name = "Miner";
+    try{
+      var u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      if(u && u.first_name) name = u.first_name;
+    }catch(e){}
+    document.getElementById("userName").textContent = name;
+  })();
+
+  renderAll();
+  window.addEventListener("beforeunload", function(){ state.lastSeen = Date.now(); save(); });
+})();
+</script>
+</body>
+</html>
